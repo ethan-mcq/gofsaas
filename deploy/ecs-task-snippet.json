@@ -1,0 +1,66 @@
+{
+  "comment": "Snippet for ECS task definition. Add this to containerDefinitions.",
+  "containerDefinitions": [
+    {
+      "name": "gofsaas-sidecar",
+      "image": "your-ecr-account.dkr.ecr.us-east-1.amazonaws.com/gofsaas:latest",
+      "essential": false,
+      "command": [
+        "mount",
+        "--mount", "/files",
+        "--bucket", "my-genomics-bucket",
+        "--prefix", "data/",
+        "--cache-dir", "/tmp/gofsaas-cache",
+        "--socket", "/run/gofsaas/gofsaas.sock"
+      ],
+      "environment": [
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "gofsaas-mount",
+          "containerPath": "/files",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "gofsaas-socket",
+          "containerPath": "/run/gofsaas",
+          "readOnly": false
+        }
+      ],
+      "linuxParameters": {
+        "capabilities": {
+          "add": ["SYS_ADMIN"]
+        },
+        "devices": [
+          {
+            "hostPath": "/dev/fuse",
+            "containerPath": "/dev/fuse",
+            "permissions": ["read", "write", "mknod"]
+          }
+        ]
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/gofsaas",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "gofsaas"
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "gofsaas-mount",
+      "host": {}
+    },
+    {
+      "name": "gofsaas-socket",
+      "host": {}
+    }
+  ]
+}
