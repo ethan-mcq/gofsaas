@@ -75,7 +75,7 @@ func TestHandle_Exists_NotFound(t *testing.T) {
 	}
 }
 
-func TestHandle_Fetch_Success(t *testing.T) {
+func TestHandle_Fetch_NonBlocking(t *testing.T) {
 	s3c := fakes.NewInMemoryS3Client()
 	s3c.AddObject("my-bucket", "files/samples/HG001.bam", []byte("bam-data"))
 	cache := fakes.NewInMemoryCache()
@@ -83,7 +83,26 @@ func TestHandle_Fetch_Success(t *testing.T) {
 	res := &resolverSpy{bucket: "my-bucket"}
 	h := socket.NewHandler(res, s3c, sm, cache)
 
+	// Non-blocking fetch returns immediately with OK=true.
 	resp := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+	if !resp.OK {
+		t.Fatalf("expected OK=true, got error: %s", resp.Error)
+	}
+	// DurationMs should be zero since it's fire-and-forget.
+	if resp.DurationMs != 0 {
+		t.Fatalf("expected DurationMs=0 for non-blocking fetch, got %d", resp.DurationMs)
+	}
+}
+
+func TestHandle_FetchWait_Success(t *testing.T) {
+	s3c := fakes.NewInMemoryS3Client()
+	s3c.AddObject("my-bucket", "files/samples/HG001.bam", []byte("bam-data"))
+	cache := fakes.NewInMemoryCache()
+	sm := state.NewStateMap()
+	res := &resolverSpy{bucket: "my-bucket"}
+	h := socket.NewHandler(res, s3c, sm, cache)
+
+	resp := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 	if resp.Error != "" {
 		t.Fatalf("unexpected error: %s", resp.Error)
 	}
@@ -92,14 +111,14 @@ func TestHandle_Fetch_Success(t *testing.T) {
 	}
 }
 
-func TestHandle_Fetch_S3NotFound(t *testing.T) {
+func TestHandle_FetchWait_S3NotFound(t *testing.T) {
 	s3c := fakes.NewInMemoryS3Client()
 	cache := fakes.NewInMemoryCache()
 	sm := state.NewStateMap()
 	res := &resolverSpy{bucket: "my-bucket"}
 	h := socket.NewHandler(res, s3c, sm, cache)
 
-	resp := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/missing.bam"})
+	resp := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/missing.bam", Wait: true})
 	if resp.OK {
 		t.Fatal("expected OK=false")
 	}
@@ -116,8 +135,8 @@ func TestHandle_Clean_Success(t *testing.T) {
 	res := &resolverSpy{bucket: "my-bucket"}
 	h := socket.NewHandler(res, s3c, sm, c)
 
-	// Fetch first
-	h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+	// Fetch first (blocking so the file is cached before clean)
+	h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 
 	// Then clean
 	resp := h.Handle(context.Background(), socket.Request{Op: "clean", Path: "/files/samples/HG001.bam"})
@@ -164,7 +183,7 @@ func TestHandle_Fetch_Deduplication(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+			h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 		}()
 	}
 	wg.Wait()
@@ -194,12 +213,12 @@ func TestHandle_Fetch_TransientError_AllowsRetry(t *testing.T) {
 	res := &resolverSpy{bucket: "my-bucket"}
 	h := socket.NewHandler(res, dec, sm, c)
 
-	resp1 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+	resp1 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 	if resp1.OK {
 		t.Fatal("first fetch should fail")
 	}
 
-	resp2 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+	resp2 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 	if !resp2.OK {
 		t.Fatalf("second fetch should succeed, got error: %s", resp2.Error)
 	}
@@ -220,7 +239,7 @@ func TestHandle_Fetch_PermanentError_BlocksRetry(t *testing.T) {
 	res := &resolverSpy{bucket: "my-bucket"}
 	h := socket.NewHandler(res, dec, sm, c)
 
-	resp1 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/missing.bam"})
+	resp1 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/missing.bam", Wait: true})
 	if resp1.OK {
 		t.Fatal("first fetch should fail")
 	}
@@ -228,7 +247,7 @@ func TestHandle_Fetch_PermanentError_BlocksRetry(t *testing.T) {
 		t.Fatal("should have error message")
 	}
 
-	resp2 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/missing.bam"})
+	resp2 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/missing.bam", Wait: true})
 	if resp2.OK {
 		t.Fatal("second fetch should also fail")
 	}
@@ -245,8 +264,8 @@ func TestHandle_Clean_ThenRefetch(t *testing.T) {
 	res := &resolverSpy{bucket: "my-bucket"}
 	h := socket.NewHandler(res, s3c, sm, c)
 
-	// Fetch
-	resp1 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+	// Fetch (blocking)
+	resp1 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 	if !resp1.OK {
 		t.Fatalf("first fetch failed: %s", resp1.Error)
 	}
@@ -257,8 +276,8 @@ func TestHandle_Clean_ThenRefetch(t *testing.T) {
 		t.Fatalf("clean failed: %s", resp2.Error)
 	}
 
-	// Refetch
-	resp3 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam"})
+	// Refetch (blocking)
+	resp3 := h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
 	if !resp3.OK {
 		t.Fatalf("refetch failed: %s", resp3.Error)
 	}

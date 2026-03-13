@@ -64,11 +64,9 @@ func (h *Handler) handleExists(ctx context.Context, req Request) Response {
 	return Response{Exists: true, SizeBytes: meta.Size, Cached: cached}
 }
 
-func (h *Handler) handleFetch(ctx context.Context, req Request) Response {
-	start := time.Now()
+func (h *Handler) fetchFn(ctx context.Context, req Request) func() error {
 	mountRelPath := absToRelPath(req.Path)
-
-	err := h.sm.Fetch(req.Path, func() error {
+	return func() error {
 		bucket, key, resolveErr := h.resolver.Resolve(req.Path)
 		if resolveErr != nil {
 			return fmt.Errorf("resolve %s: %w", req.Path, resolveErr)
@@ -84,8 +82,25 @@ func (h *Handler) handleFetch(ctx context.Context, req Request) Response {
 			return getErr
 		}
 		return writeErr
-	})
+	}
+}
 
+func (h *Handler) handleFetch(ctx context.Context, req Request) Response {
+	if req.Wait {
+		return h.handleFetchWait(ctx, req)
+	}
+
+	// Fire-and-forget: spawn the fetch in a background goroutine.
+	go h.sm.Fetch(req.Path, h.fetchFn(ctx, req))
+
+	return Response{OK: true}
+}
+
+func (h *Handler) handleFetchWait(ctx context.Context, req Request) Response {
+	start := time.Now()
+	mountRelPath := absToRelPath(req.Path)
+
+	err := h.sm.Fetch(req.Path, h.fetchFn(ctx, req))
 	if err != nil {
 		return Response{OK: false, Error: err.Error()}
 	}
