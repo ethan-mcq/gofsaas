@@ -4,6 +4,7 @@ package socket
 type Request struct {
 	Op   string `json:"op"`
 	Path string `json:"path"`
+	Wait bool   `json:"wait,omitempty"`
 }
 
 // Response is the JSON message returned by the socket server.
