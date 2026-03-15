@@ -29,6 +29,8 @@ type StateMap interface {
 	Get(path string) (FileState, error)
 	// Reset clears the state for path, allowing a future Fetch to re-run.
 	Reset(path string)
+	// Stats returns counts of files currently cached and in-flight.
+	Stats() (filesCached, filesFetching int)
 }
 
 type entry struct {
@@ -144,6 +146,21 @@ func (sm *ConcreteStateMap) Reset(path string) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	delete(sm.entries, path)
+}
+
+// Stats returns counts of entries in StateCached and StateFetching states.
+func (sm *ConcreteStateMap) Stats() (filesCached, filesFetching int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	for _, e := range sm.entries {
+		switch e.state {
+		case StateCached:
+			filesCached++
+		case StateFetching:
+			filesFetching++
+		}
+	}
+	return
 }
 
 // WaitersForPath returns the number of goroutines currently waiting on the

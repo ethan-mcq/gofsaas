@@ -71,3 +71,14 @@ func (c *InMemoryCache) IsCached(relPath string) bool {
 func (c *InMemoryCache) LocalPath(relPath string) string {
 	return "/inmem/" + relPath
 }
+
+// Stats returns total bytes and file count across all cached entries.
+func (c *InMemoryCache) Stats() (bytesUsed int64, filesCached int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, data := range c.entries {
+		bytesUsed += int64(len(data))
+		filesCached++
+	}
+	return
+}

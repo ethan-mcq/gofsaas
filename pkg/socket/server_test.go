@@ -256,6 +256,35 @@ func TestHandle_Fetch_PermanentError_BlocksRetry(t *testing.T) {
 	}
 }
 
+func TestHandle_Status(t *testing.T) {
+	s3c := fakes.NewInMemoryS3Client()
+	s3c.AddObject("my-bucket", "files/samples/HG001.bam", []byte("bam-data"))
+	s3c.AddObject("my-bucket", "files/samples/HG002.bam", []byte("more-data"))
+	c := fakes.NewInMemoryCache()
+	sm := state.NewStateMap()
+	res := &resolverSpy{bucket: "my-bucket"}
+	h := socket.NewHandler(res, s3c, sm, c)
+
+	// Fetch two files so they show up in status.
+	h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG001.bam", Wait: true})
+	h.Handle(context.Background(), socket.Request{Op: "fetch", Path: "/files/samples/HG002.bam", Wait: true})
+
+	resp := h.Handle(context.Background(), socket.Request{Op: "status"})
+	if !resp.OK {
+		t.Fatalf("expected OK=true, got error: %s", resp.Error)
+	}
+	if resp.FilesCached != 2 {
+		t.Fatalf("expected FilesCached=2, got %d", resp.FilesCached)
+	}
+	if resp.FilesFetching != 0 {
+		t.Fatalf("expected FilesFetching=0, got %d", resp.FilesFetching)
+	}
+	wantBytes := int64(len("bam-data") + len("more-data"))
+	if resp.CacheBytesUsed != wantBytes {
+		t.Fatalf("expected CacheBytesUsed=%d, got %d", wantBytes, resp.CacheBytesUsed)
+	}
+}
+
 func TestHandle_Clean_ThenRefetch(t *testing.T) {
 	s3c := fakes.NewInMemoryS3Client()
 	s3c.AddObject("my-bucket", "files/samples/HG001.bam", []byte("bam-data"))
