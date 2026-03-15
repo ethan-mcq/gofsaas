@@ -16,20 +16,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Build binaries
+      - name: Build binary inside Amazon Linux 2 container
         run: |
-          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
-            -o gofsaas-linux-amd64 ./cmd/gofsaas
-          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
-            -o gofsaas-linux-arm64 ./cmd/gofsaas
+          docker run --rm \
+            -v "$PWD":/src \
+            -w /src \
+            amazonlinux:2 \
+            bash -c "
+              set -euo pipefail
+              yum install -y tar curl git fuse-devel gcc
+              curl -fsSL https://dl.google.com/go/go1.24.1.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+              export PATH=\$PATH:/usr/local/go/bin
+              export GOPATH=/root/go
+              export GOMODCACHE=/root/go/pkg/mod
+              go build -trimpath -ldflags='-s -w -X main.version=${{ github.ref_name }}' \
+                -o gofsaas-linux-amd64 ./cmd/gofsaas
+            "
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            gofsaas-linux-amd64
-            gofsaas-linux-arm64
+          files: gofsaas-linux-amd64
