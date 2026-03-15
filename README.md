@@ -80,7 +80,7 @@ Environment variable equivalents:
 - `GOFSAAS_BUCKET` — S3 bucket name
 - `GOFSAAS_PREFIX` — S3 key prefix
 - `GOFSAAS_CACHE_DIR` — local cache directory (default: `/tmp/gofsaas-cache`)
-- `GOFSAAS_SOCKET` — Unix socket path (default: `/run/gofsaas/gofsaas.sock`)
+- `GOFSAAS_SOCKET` — Unix socket path. If unset, falls back to `$XDG_RUNTIME_DIR/gofsaas.sock`, then `~/.gofsaas/gofsaas.sock`. Set this to avoid passing `--socket` to every command.
 
 ### Access Modes
 
