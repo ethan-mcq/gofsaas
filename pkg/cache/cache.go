@@ -17,6 +17,8 @@ type Cache interface {
 	OpenRef(mountRelPath string)
 	CloseRef(mountRelPath string)
 	IsCached(mountRelPath string) bool
+	// Stats returns the total bytes used and number of files stored in the cache.
+	Stats() (bytesUsed int64, filesCached int)
 }
 
 type refEntry struct {
@@ -132,4 +134,17 @@ func (c *DiskCache) CloseRef(relPath string) {
 func (c *DiskCache) IsCached(relPath string) bool {
 	_, err := os.Stat(c.LocalPath(relPath))
 	return err == nil
+}
+
+// Stats walks the cache directory and returns total bytes used and file count.
+func (c *DiskCache) Stats() (bytesUsed int64, filesCached int) {
+	filepath.Walk(c.baseDir, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		bytesUsed += info.Size()
+		filesCached++
+		return nil
+	})
+	return
 }

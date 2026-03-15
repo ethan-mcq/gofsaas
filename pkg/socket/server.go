@@ -123,7 +123,14 @@ func (h *Handler) handleClean(req Request) Response {
 }
 
 func (h *Handler) handleStatus() Response {
-	return Response{OK: true}
+	bytesUsed, _ := h.cache.Stats()
+	filesCached, filesFetching := h.sm.Stats()
+	return Response{
+		OK:             true,
+		CacheBytesUsed: bytesUsed,
+		FilesCached:    filesCached,
+		FilesFetching:  filesFetching,
+	}
 }
 
 // absToRelPath strips the leading slash from an absolute path to use as a
