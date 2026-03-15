@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,6 +37,7 @@ type attrCacheEntry struct {
 // FS is the root FUSE filesystem object. It implements fs.FS.
 type FS struct {
 	resolver     resolver.Resolver
+	mountPath    string
 	s3           s3client.Client
 	sm           state.StateMap
 	cache        cache.Cache
@@ -46,7 +48,7 @@ type FS struct {
 }
 
 // NewFS creates a FS with the given dependencies.
-func NewFS(r resolver.Resolver, s3c s3client.Client, sm state.StateMap, c cache.Cache, maxConcurrent int, attrCacheTTL time.Duration) *FS {
+func NewFS(r resolver.Resolver, mountPath string, s3c s3client.Client, sm state.StateMap, c cache.Cache, maxConcurrent int, attrCacheTTL time.Duration) *FS {
 	if maxConcurrent <= 0 {
 		maxConcurrent = 8
 	}
@@ -55,6 +57,7 @@ func NewFS(r resolver.Resolver, s3c s3client.Client, sm state.StateMap, c cache.
 	}
 	return &FS{
 		resolver:     r,
+		mountPath:    strings.TrimRight(mountPath, "/"),
 		s3:           s3c,
 		sm:           sm,
 		cache:        c,
@@ -71,7 +74,7 @@ func (f *FS) Cache() cache.Cache {
 
 // Root returns the root node of the filesystem.
 func (f *FS) Root() (fs.Node, error) {
-	return &Dir{fs: f, absPath: "/"}, nil
+	return &Dir{fs: f, absPath: f.mountPath}, nil
 }
 
 // Mount mounts the FUSE filesystem at mountPoint and serves requests until ctx is cancelled.
@@ -125,13 +128,7 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]bazil.Dirent, error) {
 
 // Lookup finds a child node by name.
 func (d *Dir) Lookup(ctx context.Context, name string) (fs.Node, error) {
-	childPath := d.absPath
-	if childPath == "/" {
-		childPath = "/" + name
-	} else {
-		childPath = d.absPath + "/" + name
-	}
-	return &File{fs: d.fs, absPath: childPath}, nil
+	return &File{fs: d.fs, absPath: d.absPath + "/" + name}, nil
 }
 
 // File represents a file node in the FUSE filesystem.

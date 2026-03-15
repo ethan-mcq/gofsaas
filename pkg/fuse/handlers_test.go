@@ -26,7 +26,7 @@ func makeFSWithTTL(s3c s3client.Client, ttl time.Duration) *fusepkg.FS {
 	r := resolver.New("/files", "my-bucket", "data/")
 	sm := state.NewStateMap()
 	c := fakes.NewInMemoryCache()
-	return fusepkg.NewFS(r, s3c, sm, c, 4, ttl)
+	return fusepkg.NewFS(r, "/files", s3c, sm, c, 4, ttl)
 }
 
 // headCountSpy wraps any s3client.Client and counts Head calls.

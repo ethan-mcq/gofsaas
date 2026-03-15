@@ -160,7 +160,7 @@ func runMount(args []string) error {
 	sm := state.NewStateMap()
 	c := cache.New(cacheDir)
 
-	fuseFS := fusepkg.NewFS(r, s3c, sm, c, maxConcurrent, 30*time.Second)
+	fuseFS := fusepkg.NewFS(r, mountPath, s3c, sm, c, maxConcurrent, 30*time.Second)
 
 	cfg := fusepkg.Config{
 		MountPoint:          mountPath,
