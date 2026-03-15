@@ -29,7 +29,7 @@ jobs:
               export PATH=\$PATH:/usr/local/go/bin
               export GOPATH=/root/go
               export GOMODCACHE=/root/go/pkg/mod
-              go build -trimpath -ldflags='-s -w -X main.version=${{ github.ref_name }}' \
+              go build -buildvcs=false -trimpath -ldflags='-s -w -X main.version=${{ github.ref_name }}' \
                 -o gofsaas-linux-amd64 ./cmd/gofsaas
             "
 
