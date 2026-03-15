@@ -138,18 +138,34 @@ gofsaas status --socket /run/gofsaas/gofsaas.sock
 
 ### JSON Response Format
 
-All socket operations return JSON:
+Each operation returns a JSON object. Only relevant fields are included in each response (omitempty).
 
+**`exists`**
 ```json
-{
-  "exists": true,
-  "cached": false,
-  "size_bytes": 12345678,
-  "ok": true,
-  "duration_ms": 340,
-  "freed_bytes": 12345678
-}
+{ "exists": true, "cached": true, "size_bytes": 12345678 }
 ```
+
+**`fetch`** (non-blocking)
+```json
+{ "ok": true }
+```
+
+**`fetch --wait`**
+```json
+{ "ok": true, "from_cache": false, "duration_ms": 340 }
+```
+
+**`clean`**
+```json
+{ "ok": true, "freed_bytes": 12345678 }
+```
+
+**`status`**
+```json
+{ "ok": true, "cache_bytes_used": 987654321, "files_cached": 42, "files_fetching": 3 }
+```
+
+On error, any operation may return `{ "error": "message" }`.
 
 ## Running Tests
 
